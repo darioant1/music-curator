@@ -1,36 +1,46 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# My Music Curator
 
-## Getting Started
+A personal Spotify music discovery dashboard. Next.js 16 (App Router, Cache Components), TypeScript, Tailwind CSS v4.
 
-First, run the development server:
+## Setup
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+1. Copy `.env.example` to `.env.local` and fill in your Spotify app credentials and a random `SESSION_SECRET`.
+2. In the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard), register the redirect URI
+   `http://127.0.0.1:3000/api/auth/callback/spotify` and add every user under **Settings → User Management**
+   (Development Mode allows up to 5 allowlisted users; the app owner needs Premium).
+3. `npm install && npm run dev`, then open **http://127.0.0.1:3000** (not `localhost` — cookies are per-host).
+
+## Architecture
+
+```
+src/
+  proxy.ts                     Guards /dashboard; refreshes Spotify tokens before they expire
+  lib/
+    env.ts                     Server-only env access
+    auth/crypto.ts             AES-256-GCM sealing for the session cookie
+    auth/session.ts            Session shape, cookie options, getSession()
+    spotify/oauth.ts           Authorization Code flow: authorize URL, code exchange, refresh
+    spotify/client.ts          HTTP client: retries, 429 Retry-After, pagination, typed errors
+    spotify/api.ts             Data Access Layer: getCurrentUser, getTopArtists, getTopTracks, ...
+    spotify/types.ts           Raw Spotify shapes vs. app domain models
+    spotify/safe.ts            load(): turns expected API failures into renderable errors
+    insights.ts                Calculated stats (pure functions over retrieved data)
+  app/
+    api/auth/{login,callback/spotify,logout}   OAuth route handlers
+    page.tsx                   Landing page
+    dashboard/                 Overview, artists, tracks, playlists, liked songs
+  components/                  UI building blocks
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Tokens live only in an encrypted, httpOnly cookie and are used only on the server. No API route returns them.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Spotify API limitations (verified against the docs, Oct 2026)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- Since the February 2026 Development Mode changes, `popularity` and `followers` are removed and artist `genres`
+  is deprecated (often empty). The UI hides genre analysis when no genres are returned.
+- Top items cover 3 windows (~4 weeks, ~6 months, ~1 year), max 50 each, and reflect affinity, not play counts.
+- Recently played returns only the last 50 plays. There is no full listening-history endpoint;
+  Spotify's downloadable "Extended streaming history" is the planned Phase 2 import path.
+- Playlist contents are only available for playlists the user owns or collaborates on.
+- Spotify has no token-revocation endpoint. "Disconnect" clears the session; full revocation is at
+  https://www.spotify.com/account/apps/.
