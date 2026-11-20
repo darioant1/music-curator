@@ -4,13 +4,23 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 
-const NAV_ITEMS = [
-  { href: "/dashboard", label: "Overview", icon: IconOverview },
-  { href: "/dashboard/artists", label: "Artists", icon: IconArtist },
-  { href: "/dashboard/tracks", label: "Tracks", icon: IconTrack },
-  { href: "/dashboard/playlists", label: "Playlists", icon: IconPlaylist },
-  { href: "/dashboard/library", label: "Liked", icon: IconHeart },
-] as const;
+type NavItem = {
+  href: string;
+  label: string;
+  icon: (p: IconProps) => ReactNode;
+  /** Shown in the phone tab bar (space for 6). Others are reachable from pages. */
+  mobile: boolean;
+};
+
+const NAV_ITEMS: NavItem[] = [
+  { href: "/dashboard", label: "Overview", icon: IconOverview, mobile: true },
+  { href: "/dashboard/artists", label: "Artists", icon: IconArtist, mobile: true },
+  { href: "/dashboard/tracks", label: "Tracks", icon: IconTrack, mobile: true },
+  { href: "/dashboard/history", label: "History", icon: IconHistory, mobile: true },
+  { href: "/dashboard/playlists", label: "Playlists", icon: IconPlaylist, mobile: true },
+  { href: "/dashboard/library", label: "Liked", icon: IconHeart, mobile: true },
+  { href: "/dashboard/data", label: "Your data", icon: IconData, mobile: false },
+];
 
 function useIsActive() {
   const pathname = usePathname();
@@ -52,8 +62,8 @@ export function MobileTabBar() {
       className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-bg/85 backdrop-blur-xl md:hidden"
       style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
     >
-      <div className="grid grid-cols-5">
-        {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
+      <div className="grid grid-cols-6">
+        {NAV_ITEMS.filter((item) => item.mobile).map(({ href, label, icon: Icon }) => {
           const active = isActive(href);
           return (
             <Link
@@ -128,6 +138,24 @@ function IconPlaylist(p: IconProps) {
     <Svg {...p}>
       <path d="M3 6h13M3 12h13M3 18h8" />
       <path d="M19 15v6M16 18h6" />
+    </Svg>
+  );
+}
+
+function IconHistory(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
+      <path d="M3 3v5h5M12 7v5l3 2" />
+    </Svg>
+  );
+}
+
+function IconData(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <ellipse cx="12" cy="5" rx="8" ry="3" />
+      <path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6" />
     </Svg>
   );
 }

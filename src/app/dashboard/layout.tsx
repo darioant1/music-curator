@@ -1,12 +1,17 @@
 import { Suspense } from "react";
 import { Logo, SpotifyAttribution } from "@/components/brand";
 import { MobileTabBar, SidebarNav } from "@/components/nav";
+import { SyncOnLoad } from "@/components/sync-on-load";
+import { TimezoneSync } from "@/components/timezone-sync";
 import { LogoutButton, UserChip, UserChipSkeleton } from "@/components/user-menu";
 
 /**
  * Authenticated app shell. Everything here is static and prerendered; only
  * the user chip reads the session, so it streams in behind <Suspense>.
  * Access control happens in src/proxy.ts and again in the Data Access Layer.
+ *
+ * <SyncOnLoad> asks the server to save recent plays and the daily top-items
+ * snapshot; <TimezoneSync> reports the browser's time zone.
  */
 export default function DashboardLayout({ children }: LayoutProps<"/dashboard">) {
   return (
@@ -42,6 +47,8 @@ export default function DashboardLayout({ children }: LayoutProps<"/dashboard">)
       </div>
 
       <MobileTabBar />
+      <TimezoneSync />
+      <SyncOnLoad />
     </div>
   );
 }

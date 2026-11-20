@@ -1,15 +1,13 @@
 import "server-only";
 import { cache } from "react";
-import { redirect } from "next/navigation";
-import { getSession } from "@/lib/auth/session";
+import { requireSession } from "@/lib/auth/current";
 import { spotifyFetch, spotifyPaginate } from "./client";
+import { notNull, toArtist, toImages, toTrack } from "./mappers";
 import type {
   Artist,
-  Image,
   PlayedTrack,
   Playlist,
   RawArtist,
-  RawImage,
   RawPlayHistory,
   RawPlaylist,
   RawSavedTrack,
@@ -32,53 +30,10 @@ import type {
  * request (e.g. the layout and the page both asking for the profile).
  */
 
-const requireAccessToken = cache(async (): Promise<{ token: string; userId: string }> => {
-  const session = await getSession();
-  if (!session) redirect("/?error=signed_out");
-  return { token: session.accessToken, userId: session.userId };
-});
-
-// --- mappers ---------------------------------------------------------------
-
-const toImages = (images: RawImage[] | null | undefined): Image[] =>
-  (images ?? []).map(({ url, width, height }) => ({ url, width, height }));
-
-function toTrack(raw: RawTrack): Track | null {
-  // Local files and unavailable tracks have no id; skip them rather than render broken rows.
-  if (!raw.id || raw.is_local) return null;
-  const year = Number.parseInt(raw.album.release_date?.slice(0, 4) ?? "", 10);
-  return {
-    id: raw.id,
-    name: raw.name,
-    durationMs: raw.duration_ms,
-    explicit: raw.explicit,
-    artists: raw.artists.map(({ id, name }) => ({ id, name })),
-    album: {
-      id: raw.album.id,
-      name: raw.album.name,
-      images: toImages(raw.album.images),
-      releaseYear: Number.isFinite(year) && year > 0 ? year : null,
-    },
-    spotifyUrl: raw.external_urls.spotify ?? null,
-  };
-}
-
-function toArtist(raw: RawArtist): Artist {
-  return {
-    id: raw.id,
-    name: raw.name,
-    images: toImages(raw.images),
-    genres: raw.genres ?? [],
-    spotifyUrl: raw.external_urls.spotify,
-  };
-}
-
-const notNull = <T>(value: T | null): value is T => value !== null;
-
 // --- queries ---------------------------------------------------------------
 
 export const getCurrentUser = cache(async (): Promise<UserProfile> => {
-  const { token } = await requireAccessToken();
+  const { token } = await requireSession();
   const raw = await spotifyFetch<RawUser>(token, "/me");
   return {
     id: raw.id,
@@ -90,7 +45,7 @@ export const getCurrentUser = cache(async (): Promise<UserProfile> => {
 
 /** Spotify caps top items at 50 per request; that's the full window we display. */
 export const getTopArtists = cache(async (timeRange: TimeRange, limit = 50): Promise<Artist[]> => {
-  const { token } = await requireAccessToken();
+  const { token } = await requireSession();
   const page = await spotifyFetch<{ items: RawArtist[] }>(token, "/me/top/artists", {
     time_range: timeRange,
     limit,
@@ -99,7 +54,7 @@ export const getTopArtists = cache(async (timeRange: TimeRange, limit = 50): Pro
 });
 
 export const getTopTracks = cache(async (timeRange: TimeRange, limit = 50): Promise<Track[]> => {
-  const { token } = await requireAccessToken();
+  const { token } = await requireSession();
   const page = await spotifyFetch<{ items: RawTrack[] }>(token, "/me/top/tracks", {
     time_range: timeRange,
     limit,
@@ -108,7 +63,7 @@ export const getTopTracks = cache(async (timeRange: TimeRange, limit = 50): Prom
 });
 
 export const getPlaylists = cache(async (): Promise<{ playlists: Playlist[]; total: number }> => {
-  const { token, userId } = await requireAccessToken();
+  const { token, userId } = await requireSession();
   const { items, total } = await spotifyPaginate<RawPlaylist | null>(token, "/me/playlists", {
     maxItems: 500,
   });
@@ -137,7 +92,7 @@ export const getSavedTracks = cache(
   async (
     maxItems = 200,
   ): Promise<{ tracks: SavedTrack[]; total: number; fetchedAt: number }> => {
-    const { token } = await requireAccessToken();
+    const { token } = await requireSession();
     const { items, total } = await spotifyPaginate<RawSavedTrack>(token, "/me/tracks", {
       maxItems,
     });
@@ -157,7 +112,7 @@ export const getSavedTracks = cache(
  */
 export const getRecentlyPlayed = cache(
   async (): Promise<{ plays: PlayedTrack[]; fetchedAt: number }> => {
-    const { token } = await requireAccessToken();
+    const { token } = await requireSession();
     const page = await spotifyFetch<{ items: RawPlayHistory[] }>(
       token,
       "/me/player/recently-played",

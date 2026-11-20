@@ -9,6 +9,20 @@ A personal Spotify music discovery dashboard. Next.js 16 (App Router, Cache Comp
    `http://127.0.0.1:3000/api/auth/callback/spotify` and add every user under **Settings → User Management**
    (Development Mode allows up to 5 allowlisted users; the app owner needs Premium).
 3. `npm install && npm run dev`, then open **http://127.0.0.1:3000** (not `localhost` — cookies are per-host).
+   The SQLite database (`data/curator.db`) is created and migrated automatically on first use.
+
+Scripts: `npm test` (unit tests), `npm run typecheck`, `npm run lint`, `npm run db:generate`
+(create a migration after editing `src/lib/db/schema.ts`), `npm run db:studio` (browse the database).
+
+## Listening history (Phase 2)
+
+- **Import:** request your data at spotify.com/account/privacy, then drop the zip on the *Your data* page.
+  Parsing happens in the browser; IP addresses, device info, and similar fields are never uploaded.
+- **Capture:** after the dashboard loads, the browser calls `POST /api/history/sync`, which saves your
+  latest 50 plays (at most every 10 minutes) and a daily snapshot of your top items.
+- **Reconciliation:** sources overlap, so queries trust extended export > account export > app capture,
+  and ignore lower-priority plays inside a higher-priority source's date range. A "play" is ≥ 30 s.
+- **Artwork** for imported items is looked up on demand and cached in `catalog_*` tables.
 
 ## Architecture
 
@@ -25,10 +39,16 @@ src/
     spotify/types.ts           Raw Spotify shapes vs. app domain models
     spotify/safe.ts            load(): turns expected API failures into renderable errors
     insights.ts                Calculated stats (pure functions over retrieved data)
+    db/schema.ts, db/index.ts  Drizzle schema and lazily-opened SQLite connection (+ migrations in /drizzle)
+    history/normalize.ts       Export parsing (shared by browser and server) + server validation
+    history/store.ts           Database writes; history/queries.ts: analytics reads
+    history/capture.ts         Recent-plays capture and daily top-item snapshots
+    history/analysis.ts        Pure analysis (clock, trends, discoveries, drift); history/time.ts: time zones
   app/
     api/auth/{login,callback/spotify,logout}   OAuth route handlers
+    api/history/{import,sync}  History upload and capture endpoints
     page.tsx                   Landing page
-    dashboard/                 Overview, artists, tracks, playlists, liked songs
+    dashboard/                 Overview, artists, tracks, history, playlists, liked songs, your data
   components/                  UI building blocks
 ```
 
@@ -40,7 +60,7 @@ Tokens live only in an encrypted, httpOnly cookie and are used only on the serve
   is deprecated (often empty). The UI hides genre analysis when no genres are returned.
 - Top items cover 3 windows (~4 weeks, ~6 months, ~1 year), max 50 each, and reflect affinity, not play counts.
 - Recently played returns only the last 50 plays. There is no full listening-history endpoint;
-  Spotify's downloadable "Extended streaming history" is the planned Phase 2 import path.
+  full history comes from Spotify's downloadable export (up to 30 days to arrive).
 - Playlist contents are only available for playlists the user owns or collaborates on.
 - Spotify has no token-revocation endpoint. "Disconnect" clears the session; full revocation is at
   https://www.spotify.com/account/apps/.

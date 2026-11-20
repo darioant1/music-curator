@@ -35,3 +35,18 @@ export function pickImage(images: Image[], minSize: number): string | null {
   const choice = sized.length > 0 ? sized[sized.length - 1] : images[0];
   return choice.url;
 }
+
+/** "Mar 4, 2021" in the given time zone. */
+export function formatDate(ms: number, timeZone = "UTC"): string {
+  return new Date(ms).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    timeZone,
+  });
+}
+
+export function formatHours(ms: number): string {
+  const hours = ms / 3_600_000;
+  return hours >= 100 ? formatNumber(Math.round(hours)) : hours.toFixed(1);
+}
