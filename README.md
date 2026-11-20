@@ -1,28 +1,35 @@
-# My Music Curator
+# Music Curator
 
-A personal Spotify music discovery dashboard. Next.js 16 (App Router, Cache Components), TypeScript, Tailwind CSS v4.
+A personal music discovery dashboard built on the Spotify Web API. It shows your top artists and tracks, imports your
+full listening history from Spotify's data export, keeps it current automatically, and turns it into trends and charts.
 
-## Setup
+**Stack:** Next.js 16 (App Router, Cache Components) · React 19 · TypeScript · Tailwind CSS v4 · SQLite + Drizzle ORM ·
+Vitest
 
-1. Copy `.env.example` to `.env.local` and fill in your Spotify app credentials and a random `SESSION_SECRET`.
-2. In the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard), register the redirect URI
-   `http://127.0.0.1:3000/api/auth/callback/spotify` and add every user under **Settings → User Management**
-   (Development Mode allows up to 5 allowlisted users; the app owner needs Premium).
-3. `npm install && npm run dev`, then open **http://127.0.0.1:3000** (not `localhost` — cookies are per-host).
-   The SQLite database (`data/curator.db`) is created and migrated automatically on first use.
+## Features
 
-Scripts: `npm test` (unit tests), `npm run typecheck`, `npm run lint`, `npm run db:generate`
-(create a migration after editing `src/lib/db/schema.ts`), `npm run db:studio` (browse the database).
+- **Dashboard:** top artists and tracks across three time windows, recently played, playlists and liked songs.
+- **Full listening history:** drop in your Spotify data export (zip). It's parsed in the browser, so IP addresses and
+  device info are never uploaded.
+- **Automatic capture:** each visit saves your latest plays and a daily snapshot of your top items, so history keeps
+  growing after the export.
+- **Analytics:** listening clock, monthly and yearly trends, new discoveries, forgotten favorites and taste drift,
+  with charts.
+- **Your data:** see what's stored, and delete it or disconnect at any time.
 
-## Listening history (Phase 2)
+## Engineering highlights
 
-- **Import:** request your data at spotify.com/account/privacy, then drop the zip on the *Your data* page.
-  Parsing happens in the browser; IP addresses, device info, and similar fields are never uploaded.
-- **Capture:** after the dashboard loads, the browser calls `POST /api/history/sync`, which saves your
-  latest 50 plays (at most every 10 minutes) and a daily snapshot of your top items.
-- **Reconciliation:** sources overlap, so queries trust extended export > account export > app capture,
-  and ignore lower-priority plays inside a higher-priority source's date range. A "play" is ≥ 30 s.
-- **Artwork** for imported items is looked up on demand and cached in `catalog_*` tables.
+- **Secure auth:** Spotify OAuth (Authorization Code flow) with tokens sealed in an AES-256-GCM encrypted, httpOnly
+  cookie. Tokens are used only on the server, refreshed before they expire, and never returned by any API route.
+- **Resilient API client:** retries, honors `429 Retry-After`, handles pagination, and maps failures to typed errors
+  so expected API problems render as messages instead of crashing pages.
+- **Reconciling overlapping sources:** the extended export, account export and live capture overlap. Queries trust
+  them in priority order (extended > account > capture) and ignore lower-priority plays inside a higher-priority
+  source's date range. A play counts at 30 seconds or more.
+- **Clean layering:** a data access layer separates raw Spotify shapes from app domain models. The analysis code is
+  pure functions, covered by unit tests.
+- **Database:** SQLite through Drizzle with versioned migrations, created and migrated automatically on first run.
+  Artwork for imported items is looked up on demand and cached.
 
 ## Architecture
 
@@ -52,15 +59,38 @@ src/
   components/                  UI building blocks
 ```
 
-Tokens live only in an encrypted, httpOnly cookie and are used only on the server. No API route returns them.
+## Run it locally
 
-## Spotify API limitations (verified against the docs, Oct 2026)
+1. Copy `.env.example` to `.env.local`, then fill in your Spotify app credentials and a random `SESSION_SECRET`.
+2. In the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard), register the redirect URI
+   `http://127.0.0.1:3000/api/auth/callback/spotify` and add each user under **Settings → User Management**.
+   Development Mode allows up to 5 allowlisted users, and the app owner needs Premium.
+3. Run `npm install && npm run dev`, then open **http://127.0.0.1:3000**. Use that address rather than `localhost`,
+   because cookies are per-host.
 
-- Since the February 2026 Development Mode changes, `popularity` and `followers` are removed and artist `genres`
-  is deprecated (often empty). The UI hides genre analysis when no genres are returned.
-- Top items cover 3 windows (~4 weeks, ~6 months, ~1 year), max 50 each, and reflect affinity, not play counts.
-- Recently played returns only the last 50 plays. There is no full listening-history endpoint;
-  full history comes from Spotify's downloadable export (up to 30 days to arrive).
+To import history, request your data at spotify.com/account/privacy (it can take up to 30 days to arrive), then drop
+the zip on the **Your data** page.
+
+| Script | What it does |
+| --- | --- |
+| `npm test` | Unit tests (Vitest) |
+| `npm run typecheck` | TypeScript check |
+| `npm run lint` | ESLint |
+| `npm run db:generate` | Create a migration after editing `src/lib/db/schema.ts` |
+| `npm run db:studio` | Browse the database |
+
+## Spotify API limitations (checked against the docs, Oct 2026)
+
+- Since the February 2026 Development Mode changes, `popularity` and `followers` are removed and artist `genres` is
+  deprecated (often empty). The UI hides genre analysis when no genres come back.
+- Top items cover three windows (about 4 weeks, 6 months and 1 year), up to 50 each, and reflect affinity rather than
+  play counts.
+- Recently played returns only the last 50 plays. There's no full-history endpoint, which is why the app imports the
+  data export.
 - Playlist contents are only available for playlists the user owns or collaborates on.
 - Spotify has no token-revocation endpoint. "Disconnect" clears the session; full revocation is at
   https://www.spotify.com/account/apps/.
+
+---
+
+Not affiliated with or endorsed by Spotify.
